@@ -17,12 +17,13 @@ def create_connection():
 
 def create_table(conn):
     try:
-        sql_create_table = """CREATE TABLE IF NOT EXISTS vip (
-                                    steam_id integer PRIMARY KEY,
-                                    minutes integer
-                                );"""
         c = conn.cursor()
-        c.execute(sql_create_table)
+        c.execute('''CREATE TABLE IF NOT EXISTS vip (
+        steam_id INTEGER PRIMARY KEY,
+        minutes INTEGER DEFAULT 0,
+        last_updated_day TEXT,
+        successfully_seeded INTEGER DEFAULT 0,
+        successful_seeding_days INTEGER DEFAULT 0 )''')
     except Error as e:
         print(e)
 

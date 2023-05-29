@@ -24,15 +24,23 @@ def create_connection():
         return conn
     return None
 
-def give_points(conn, id):
+def give_points(c, id):
     try:
-        c = conn.cursor()
+        today = time.strftime('%Y-%m-%d', time.gmtime())
 
+        # Check if the player already has 20 minutes today
+        c.execute("SELECT minutes, last_updated_day FROM vip WHERE steam_id = ?", (id,))
+        result = c.fetchone()
+        if result is not None and result[1] == today and result[0] >= 20:
+            return
+
+        # If the id doesn't exist, create it and set minutes to 5
+        # If the id exists but last_updated_day is not today, reset minutes to 5 and set last_updated_day to today
         c.execute('''
-                INSERT INTO vip (steam_id, minutes)
-                VALUES (?, 5)
-                ON CONFLICT (steam_id) DO UPDATE SET minutes = minutes + 10;
-                ''', (id,))
+            INSERT INTO vip (steam_id, minutes, last_updated_day)
+            VALUES (?, 5, ?)
+            ON CONFLICT (steam_id) DO UPDATE SET minutes = (CASE WHEN last_updated_day = ? THEN minutes + 5 ELSE 5 END), last_updated_day = ?;
+        ''', (id, today, today, today))
 
         conn.commit()
 
@@ -52,30 +60,81 @@ def select_all_tasks(conn):
     rows = cur.fetchall()
     return rows
 
-def job(c):
+def add_vip(steam_id, expiration_timestamp):
     session_id = os.getenv('SESSIONID', '0')
-
     cookies = {'sessionid': session_id}
-    response = requests.get('http://server.deemos.club/api/get_players_fast',cookies=cookies)
-    data = response.json()
+    params = {'steam_64_id': steam_id, 'expiration': expiration_timestamp}
+    try:
+        print("vip added!!!")
+        print(steam_id)
+        print(expiration_timestamp)
+        response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
+        response.raise_for_status()  # Raise an exception if the response was unsuccessful
+    except requests.exceptions.RequestException as err:
+        print ("An error occurred: ", err)
+    else:
+        # Check response status contents
+        data = response.json()
+        if data['failed'] != False:
+            print("Error in API response:", data)
+            
+def job(conn):
+    c = conn.cursor()
+    session_id = os.getenv('SESSIONID', '0')
+    cookies = {'sessionid': session_id}
+    try:
+        response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
+        response.raise_for_status()  # Raise an exception if the response was unsuccessful
+    except requests.exceptions.RequestException as err:
+        print ("An error occurred: ", err)
+    else:
+        # Check response status contents
+        data = response.json()
+        if data['failed'] != False:
+            print("Error in API response:", data)
+            return  # Skip the rest of the function if there was an error
 
     players = len(data['result'])
 
-    if(seeding(data)):
-        for player in data['result']:
-            # print(player['steam_id_64'])
-            give_points(c,player['steam_id_64'])
+    for player in data['result']:
+        # Give points to player
+        give_points(c, player['steam_id_64'])
 
-    # print(select_all_tasks(c))
-        c.commit()
-        print("Logged seeders")
-    else:
-        print("Server has more than 50 players")
+        # Check if player has accumulated 20 minutes and seeding is False
+        c.execute("SELECT minutes, successfully_seeded FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
+        
+        result = c.fetchone()
+        if result is not None and result[0] >= 20 and not seeding(data) and result[1] == 0:
+            # Update successfully_seeded
+            c.execute('''
+                UPDATE vip SET successfully_seeded = 1 WHERE steam_id = ?;
+            ''', (player['steam_id_64'],))
 
- 
-c = create_connection()
-job(c)
-schedule.every(10).minutes.do(job,c)
+            # Update successful_seeding_days
+            c.execute('''
+                UPDATE vip SET successful_seeding_days = successful_seeding_days + 1 WHERE steam_id = ?;
+            ''', (player['steam_id_64'],))
+
+            # Add VIP for 1 day
+            current_time = time.time()
+            add_vip(player['steam_id_64'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
+
+        # Check if player has successfully seeded for 7 days in the last 30 days
+        c.execute("SELECT successful_seeding_days FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
+        
+        result = c.fetchone()
+        if result is not None and result[0] >= 7:
+            # Add VIP for 30 days
+            current_time = time.time()
+            add_vip(player['steam_id_64'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
+
+    conn.commit()
+    print("ran job")
+
+conn = create_connection()
+
+job(conn)
+schedule.every(10).seconds.do(job,conn)
 
 while True:
     schedule.run_pending()
