@@ -5,7 +5,21 @@ import time
 import json
 import sqlite3
 from sqlite3 import Error
-from setup_db import create_connection
+#from setup_db import create_connection
+
+def create_connection():
+    conn = None;
+    try:
+        #conn = sqlite3.connect(':memory:')  # create a database in RAM
+        # for a persistent database use the following line
+        conn = sqlite3.connect('vip.db')
+        print(f'successful connection with sqlite version {sqlite3.version}')
+    except Error as e:
+        print(e)
+    
+    if conn:
+        return conn
+    return None
 
 def give_points(conn, id):
     try:
@@ -20,7 +34,7 @@ def give_points(conn, id):
             UPDATE vip SET minutes = minutes + 5 WHERE steam_id = ?;
         ''', (id,))
 
-        # c.commit()
+        conn.commit()
 
     except Error as e:
         print(e)
@@ -48,6 +62,8 @@ def job(c):
             give_points(c,player['steam_id_64'])
 
     print(select_all_tasks(c))
+    c.commit()
+
 
 #setup
 c = create_connection()
