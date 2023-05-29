@@ -50,16 +50,16 @@ def select_all_tasks(conn):
     return rows
 
 def job(c):
-    # response = requests.get('http://api.example.com/data')
-    # data = response.json()
+    response = requests.get('http://server.deemos.club/api/get_players_fast')
+    data = response.json()
     # this should be replaced by the API call
-    with open('players.json') as f:
-        data = json.load(f)
+    # with open('players.json') as f:
+    #     data = json.load(f)
 
     if(seeding):
         for player in data['result']:
             print(player['steam_id_64'])
-            give_points(c,player['steam_id_64'])
+            # give_points(c,player['steam_id_64'])
 
     print(select_all_tasks(c))
     c.commit()
