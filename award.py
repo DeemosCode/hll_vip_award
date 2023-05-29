@@ -7,6 +7,8 @@ import json
 import sqlite3
 from sqlite3 import Error
 #from setup_db import create_connection
+from dotenv import load_dotenv
+load_dotenv()
 
 def create_connection():
     conn = None;
