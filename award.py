@@ -1,4 +1,5 @@
 #todo award vip to seeders
+import os
 import requests
 import schedule
 import time
@@ -39,8 +40,11 @@ def give_points(conn, id):
     except Error as e:
         print(e)
 
-def seeding():
-    return True
+def seeding(data):
+    if len(data['result']) < 50:
+        return True
+    return False
+
 
 def select_all_tasks(conn):
     cur = conn.cursor()
@@ -50,24 +54,30 @@ def select_all_tasks(conn):
     return rows
 
 def job(c):
-    response = requests.get('http://server.deemos.club/api/get_players_fast')
+    session_id = os.getenv('SESSIONID', '0')
+
+    cookies = {'sessionid': session_id}
+    response = requests.get('http://server.deemos.club/api/get_players_fast',cookies=cookies)
     data = response.json()
-    # this should be replaced by the API call
-    # with open('players.json') as f:
-    #     data = json.load(f)
 
-    if(seeding):
+    players = len(data['result'])
+
+    if(seeding(data)):
         for player in data['result']:
-            print(player['steam_id_64'])
-            # give_points(c,player['steam_id_64'])
+            # print(player['steam_id_64'])
+            give_points(c,player['steam_id_64'])
 
-    print(select_all_tasks(c))
-    c.commit()
+    # print(select_all_tasks(c))
+        c.commit()
+        print("Logged seeders")
+    else:
+        print("Server has more than 50 players")
 
 
 #setup
 c = create_connection()
-schedule.every(5).seconds.do(job,c)
+job(c)
+schedule.every(10).seconds.do(job,c)
 
 while True:
     schedule.run_pending()
