@@ -27,15 +27,12 @@ def create_connection():
 def give_points(conn, id):
     try:
         c = conn.cursor()
-        # If the id doesn't exist, create it and set hours to 5
-        c.execute('''
-            INSERT OR IGNORE INTO vip (steam_id, minutes) VALUES (?, 5);
-        ''', (id,))
 
-        # Whether the id pre-existed or was just inserted, add 5 to hours
         c.execute('''
-            UPDATE vip SET minutes = minutes + 5 WHERE steam_id = ?;
-        ''', (id,))
+                INSERT INTO vip (steam_id, minutes)
+                VALUES (?, 5)
+                ON CONFLICT (steam_id) DO UPDATE SET minutes = minutes + 10;
+                ''', (id,))
 
         conn.commit()
 
@@ -75,11 +72,10 @@ def job(c):
     else:
         print("Server has more than 50 players")
 
-
-#setup
+ 
 c = create_connection()
 job(c)
-schedule.every(10).seconds.do(job,c)
+schedule.every(10).minutes.do(job,c)
 
 while True:
     schedule.run_pending()
