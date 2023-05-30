@@ -7,8 +7,12 @@ import json
 import sqlite3
 from sqlite3 import Error
 #from setup_db import create_connection
+import logging
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def create_connection():
     conn = None;
@@ -16,15 +20,16 @@ def create_connection():
         #conn = sqlite3.connect(':memory:')  # create a database in RAM
         # for a persistent database use the following line
         conn = sqlite3.connect('vip.db')
-        print(f'successful connection with sqlite version {sqlite3.version}')
+        logger.info(f'successful connection with sqlite version %s',{sqlite3.version})
     except Error as e:
-        print(e)
+        logger.info('%s',e)
     
     if conn:
         return conn
     return None
 
-def give_points(c, id):
+def give_points(conn, id):
+    c = conn.cursor()
     try:
         today = time.strftime('%Y-%m-%d', time.gmtime())
 
@@ -45,10 +50,10 @@ def give_points(c, id):
         conn.commit()
 
     except Error as e:
-        print(e)
+        logger.info('%s',e)
 
 def seeding(data):
-    if len(data['result']) < 50:
+    if len(data['result']) < 2:
         return True
     return False
 
@@ -65,9 +70,9 @@ def add_vip(steam_id, player_name, expiration_timestamp):
     cookies = {'sessionid': session_id}
     params = {'steam_64_id': steam_id, 'name': player_name, 'expiration': expiration_timestamp}
     try:
-        print("vip added!!!")
-        print(steam_id)
-        print(expiration_timestamp)
+        logger.info(f'vip added!!!')
+        logger.info(' %s',steam_id)
+        logger.info(' %s',expiration_timestamp)
         response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
@@ -76,7 +81,7 @@ def add_vip(steam_id, player_name, expiration_timestamp):
         # Check response status contents
         data = response.json()
         if data['failed'] != False:
-            print("Error in API response:", data)
+            logger.info(f'Error in API response:', data)
             
 def job(conn):
     c = conn.cursor()
@@ -91,14 +96,15 @@ def job(conn):
         # Check response status contents
         data = response.json()
         if data['failed'] != False:
-            print("Error in API response:", data)
+            logger.info(f'Error in API response:  %s', data)
             return  # Skip the rest of the function if there was an error
 
     players = len(data['result'])
 
     for player in data['result']:
+        logger.info('%s',player['name'])
         # Give points to player
-        give_points(c, player['steam_id_64'])
+        give_points(conn, player['steam_id_64'])
 
         # Check if player has accumulated 20 minutes and seeding is False
         c.execute("SELECT minutes, successfully_seeded FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
@@ -118,7 +124,7 @@ def job(conn):
             # Add VIP for 1 day
             current_time = time.time()
             add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
-            print("One Day VIP added for "+player['name'])
+            logger.info(f'One Day VIP added for  %s',player['name'])
 
         # Check if player has successfully seeded for 7 days in the last 30 days
         c.execute("SELECT successful_seeding_days FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
@@ -128,11 +134,11 @@ def job(conn):
             # Add VIP for 30 days
             current_time = time.time()
             add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
-            print("One Month VIP added for "+player['name'])
+            logger.info(f'One Month VIP added for  %s',player['name'])
 
 
     conn.commit()
-    print("ran job")
+    logger.info(f'ran job %s',time.time()) 
 
 conn = create_connection()
 
