@@ -27,6 +27,18 @@ def create_table(conn):
     except Error as e:
         print(e)
 
+def create_failed_players_table(conn):
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS failed_players (
+            steam_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            expiration_timestamp INTEGER NOT NULL
+        );
+    ''')
+    conn.commit()
+
 #setup
-c = create_connection()
-create_table(c)
+conn = create_connection()
+create_table(conn)
+create_failed_players_table(conn)

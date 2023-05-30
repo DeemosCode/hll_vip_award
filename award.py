@@ -55,7 +55,7 @@ def give_points(conn, id):
         logger.info('%s',e)
 
 def seeding(data):
-    if len(data['result']) < 3:
+    if len(data['result']) < 50:
         return True
     return False
 
@@ -154,9 +154,7 @@ def job(conn):
     logger.info(f'ran job %s',time.time()) 
 
 conn = create_connection()
-
-job(conn)
-schedule.every(10).seconds.do(job,conn)
+schedule.every(10).minutes.do(job,conn)
 
 while True:
     schedule.run_pending()
