@@ -118,6 +118,7 @@ def job(conn):
             # Add VIP for 1 day
             current_time = time.time()
             add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
+            print("One Day VIP added for "+player['name'])
 
         # Check if player has successfully seeded for 7 days in the last 30 days
         c.execute("SELECT successful_seeding_days FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
@@ -127,6 +128,8 @@ def job(conn):
             # Add VIP for 30 days
             current_time = time.time()
             add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
+            print("One Month VIP added for "+player['name'])
+
 
     conn.commit()
     print("ran job")
