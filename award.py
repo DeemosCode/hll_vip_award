@@ -60,10 +60,10 @@ def select_all_tasks(conn):
     rows = cur.fetchall()
     return rows
 
-def add_vip(steam_id, expiration_timestamp):
+def add_vip(steam_id, player_name, expiration_timestamp):
     session_id = os.getenv('SESSIONID', '0')
     cookies = {'sessionid': session_id}
-    params = {'steam_64_id': steam_id, 'expiration': expiration_timestamp}
+    params = {'steam_64_id': steam_id, 'name': player_name, 'expiration': expiration_timestamp}
     try:
         print("vip added!!!")
         print(steam_id)
@@ -117,7 +117,7 @@ def job(conn):
 
             # Add VIP for 1 day
             current_time = time.time()
-            add_vip(player['steam_id_64'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
+            add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
 
         # Check if player has successfully seeded for 7 days in the last 30 days
         c.execute("SELECT successful_seeding_days FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
@@ -126,7 +126,7 @@ def job(conn):
         if result is not None and result[0] >= 7:
             # Add VIP for 30 days
             current_time = time.time()
-            add_vip(player['steam_id_64'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
+            add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
 
     conn.commit()
     print("ran job")
