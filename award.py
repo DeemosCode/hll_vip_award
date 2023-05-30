@@ -14,6 +14,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+failed_players = []
+
 def create_connection():
     conn = None;
     try:
@@ -53,7 +55,7 @@ def give_points(conn, id):
         logger.info('%s',e)
 
 def seeding(data):
-    if len(data['result']) < 2:
+    if len(data['result']) < 3:
         return True
     return False
 
@@ -65,23 +67,29 @@ def select_all_tasks(conn):
     rows = cur.fetchall()
     return rows
 
+from datetime import datetime
+
 def add_vip(steam_id, player_name, expiration_timestamp):
     session_id = os.getenv('SESSIONID', '0')
     cookies = {'sessionid': session_id}
-    params = {'steam_64_id': steam_id, 'name': player_name, 'expiration': expiration_timestamp}
+    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
+    params = {'steam_id_64': steam_id, 'name': player_name, 'expiration': expiration_date}
     try:
-        logger.info(f'vip added!!!')
-        logger.info(' %s',steam_id)
-        logger.info(' %s',expiration_timestamp)
         response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
         print ("An error occurred: ", err)
+        failed_players.append((steam_id, player_name, expiration_timestamp))
     else:
         # Check response status contents
         data = response.json()
         if data['failed'] != False:
             logger.info(f'Error in API response:', data)
+            failed_players.append((steam_id, player_name, expiration_timestamp))
+        else:
+            # Remove the player from the failed_players list
+            if (steam_id, player_name, expiration_timestamp) in failed_players:
+                failed_players.remove((steam_id, player_name, expiration_timestamp))
             
 def job(conn):
     c = conn.cursor()
@@ -138,6 +146,11 @@ def job(conn):
 
 
     conn.commit()
+
+    #in case the hll rcon server was down earlier
+    for player in failed_players:
+        add_vip(*player)
+
     logger.info(f'ran job %s',time.time()) 
 
 conn = create_connection()
