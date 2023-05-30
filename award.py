@@ -5,6 +5,7 @@ import schedule
 import time
 import json
 import sqlite3
+from datetime import datetime
 from sqlite3 import Error
 #from setup_db import create_connection
 import logging
@@ -60,15 +61,6 @@ def seeding(data):
     return False
 
 
-def select_all_tasks(conn):
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM vip")
-
-    rows = cur.fetchall()
-    return rows
-
-from datetime import datetime
-
 def add_vip(steam_id, player_name, expiration_timestamp):
     session_id = os.getenv('SESSIONID', '0')
     cookies = {'sessionid': session_id}
@@ -79,17 +71,19 @@ def add_vip(steam_id, player_name, expiration_timestamp):
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
         print ("An error occurred: ", err)
-        failed_players.append((steam_id, player_name, expiration_timestamp))
+        conn.execute("INSERT INTO failed_players (steam_id, player_name, expiration_timestamp) VALUES (?, ?, ?);",
+                     (steam_id, player_name, expiration_timestamp))
     else:
         # Check response status contents
         data = response.json()
         if data['failed'] != False:
             logger.info(f'Error in API response:', data)
-            failed_players.append((steam_id, player_name, expiration_timestamp))
+            conn.execute("INSERT INTO failed_players (steam_id, player_name, expiration_timestamp) VALUES (?, ?, ?);",
+                        (steam_id, player_name, expiration_timestamp))
         else:
             # Remove the player from the failed_players list
-            if (steam_id, player_name, expiration_timestamp) in failed_players:
-                failed_players.remove((steam_id, player_name, expiration_timestamp))
+            conn.execute("DELETE FROM failed_players WHERE steam_id = ? AND player_name = ? AND expiration_timestamp = ?;",
+                        (steam_id, player_name, expiration_timestamp))
             
 def job(conn):
     c = conn.cursor()
@@ -148,8 +142,8 @@ def job(conn):
     conn.commit()
 
     #in case the hll rcon server was down earlier
-    for player in failed_players:
-        add_vip(*player)
+    for player in conn.execute("SELECT * FROM failed_players").fetchall():
+        add_vip(conn, *player)
 
     logger.info(f'ran job %s',time.time()) 
 
