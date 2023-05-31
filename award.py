@@ -15,8 +15,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-failed_players = []
-
 def create_connection():
     conn = None;
     try:
@@ -56,7 +54,7 @@ def give_points(conn, id):
         logger.info('%s',e)
 
 def seeding(data):
-    if len(data['result']) < 50:
+    if len(data['result']) < 2:
         return True
     return False
 
@@ -104,7 +102,7 @@ def job(conn):
     players = len(data['result'])
 
     for player in data['result']:
-        logger.info('%s',player['name'])
+        # logger.info('%s',player['name'])
         # Give points to player
         give_points(conn, player['steam_id_64'])
 
@@ -125,7 +123,7 @@ def job(conn):
 
             # Add VIP for 1 day
             current_time = time.time()
-            add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
+            # add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
             logger.info(f'One Day VIP added for  %s',player['name'])
 
         # Check if player has successfully seeded for 7 days in the last 30 days
@@ -135,7 +133,7 @@ def job(conn):
         if result is not None and result[0] >= 7:
             # Add VIP for 30 days
             current_time = time.time()
-            add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
+            # add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
             logger.info(f'One Month VIP added for  %s',player['name'])
 
 
@@ -145,10 +143,10 @@ def job(conn):
     for player in conn.execute("SELECT * FROM failed_players").fetchall():
         add_vip(conn, *player)
 
-    logger.info(f'ran job %s',time.time()) 
+    logger.info(f'Ran job %s %s',players,time.time()) 
 
 conn = create_connection()
-schedule.every(10).minutes.do(job,conn)
+schedule.every(5).seconds.do(job,conn)
 
 while True:
     schedule.run_pending()
