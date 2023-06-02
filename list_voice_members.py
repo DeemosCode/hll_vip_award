@@ -21,4 +21,4 @@ async def list_voice_members(ctx):
     voice_members = ', '.join(voice_members)
     await ctx.send(f'Currently in Voice Channels: {voice_members}')
 
-bot.run('YOUR_BOT_TOKEN')
+bot.run('OTE5OTE3NTc5ODQ0MzQ5OTUy.GNBNf7.qikHXJcbUXaio91pZJOrNBpeKtq66ba7oAUlYY')
