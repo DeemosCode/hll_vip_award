@@ -1,5 +1,11 @@
 ﻿Scripts
 .vscode
 __pycache__
-Lib
 vip.db
+bin
+include
+lib
+lib64
+share
+pyenv.cfg
+.env

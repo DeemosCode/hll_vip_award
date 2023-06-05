@@ -53,8 +53,8 @@ def give_points(conn, id):
     except Error as e:
         logger.info('%s',e)
 
-def seeding(data):
-    if len(data['result']) < 2:
+def seeded(data):
+    if len(data['result']) >= 50:
         return True
     return False
 
@@ -106,11 +106,12 @@ def job(conn):
         # Give points to player
         give_points(conn, player['steam_id_64'])
 
-        # Check if player has accumulated 20 minutes and seeding is False
+        # Check if player has accumulated 20 minutes and server is seeded
         c.execute("SELECT minutes, successfully_seeded FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
         
         result = c.fetchone()
-        if result is not None and result[0] >= 20 and not seeding(data) and result[1] == 0:
+        # if seeding for more than 20 mins and successful seeding OR if seeding for 2 hrs
+        if result is not None and ((result[0] >= 20 and seeded(data)) or (result[0] >= 120)) and result[1] == 0:
             # Update successfully_seeded
             c.execute('''
                 UPDATE vip SET successfully_seeded = 1 WHERE steam_id = ?;
@@ -123,7 +124,7 @@ def job(conn):
 
             # Add VIP for 1 day
             current_time = time.time()
-            # add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
+            add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
             logger.info(f'One Day VIP added for  %s',player['name'])
 
         # Check if player has successfully seeded for 7 days in the last 30 days
@@ -133,7 +134,7 @@ def job(conn):
         if result is not None and result[0] >= 7:
             # Add VIP for 30 days
             current_time = time.time()
-            # add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
+            add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
             logger.info(f'One Month VIP added for  %s',player['name'])
 
 
@@ -146,7 +147,7 @@ def job(conn):
     logger.info(f'Ran job %s %s',players,time.time()) 
 
 conn = create_connection()
-schedule.every(5).seconds.do(job,conn)
+schedule.every(10).minutes.do(job,conn)
 
 while True:
     schedule.run_pending()
