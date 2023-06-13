@@ -106,7 +106,7 @@ def job(conn):
         # Give points to player
         give_points(conn, player['steam_id_64'])
 
-        # Check if player has accumulated 20 minutes and server is seeded
+        # fetch player record from database
         c.execute("SELECT minutes, successfully_seeded FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
         
         result = c.fetchone()
@@ -137,17 +137,16 @@ def job(conn):
             add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
             logger.info(f'One Month VIP added for  %s',player['name'])
 
-
     conn.commit()
 
     #in case the hll rcon server was down earlier
     for player in conn.execute("SELECT * FROM failed_players").fetchall():
         add_vip(conn, *player)
-
-    logger.info(f'Ran job %s %s',players,time.time()) 
+        
+    logger.info(f'Ran job no of players: %s',players) 
 
 conn = create_connection()
-schedule.every(10).minutes.do(job,conn)
+schedule.every(5).minutes.do(job,conn)
 
 while True:
     schedule.run_pending()

@@ -36,6 +36,13 @@ def create_failed_players_table(conn):
             expiration_timestamp INTEGER NOT NULL
         );
     ''')
+    c.execute('''
+            CREATE TABLE IF NOT EXISTS vip_dates (
+                steam_id TEXT PRIMARY KEY,
+                player_name TEXT,
+                date_time TEXT
+                )
+            ''')
     conn.commit()
 
 #setup
