@@ -9,3 +9,4 @@ lib64
 share
 pyenv.cfg
 .env
+systemd.service
