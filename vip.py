@@ -35,6 +35,7 @@ def award_vip(steam_id_64, player_name, expiration_date):
                 '$set': {'pending_award': False}, # reset 'pending_award'
             }
         )
+        print(f"VIP Awarded to {steam_id_64} {player_name} {datetime.utcnow()}")
     except requests.exceptions.RequestException as err:
         print(f"An error occurred while adding VIP status: {err}")
         # save it to try again later
@@ -46,6 +47,7 @@ def award_vip(steam_id_64, player_name, expiration_date):
         )
 
 while True:
+    no_of_players=0
     cookies = {'sessionid': session_id}
      # Check for players with pending_award: true and make API call for each
     pending_award_players = vip.find({'pending_award': True})
@@ -63,6 +65,7 @@ while True:
         print ("An error occurred: ", err)
     else:
         data = response.json()
+        no_of_players= data['result']
         if data['failed'] != False:
             print(f'Error in API response: {data}')
         else:
@@ -92,12 +95,13 @@ while True:
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
                 # Check award condition
-                if (len(data['result']) >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
+                if (no_of_players >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
 
                     # Make external API call
                     expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
                     expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
                     award_vip(steam_id_64,player_name,expiration_date)
 
+    print("Ran job - No of players : {no_of_players}")    
     # Sleep for interval (converted to seconds)
     time.sleep(interval_in_minutes * 60)
