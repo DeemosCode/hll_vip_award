@@ -1,153 +1,104 @@
-#todo award vip to seeders
 import os
-import requests
-import schedule
 import time
-import json
-import sqlite3
+import requests
+from pymongo import MongoClient
 from datetime import datetime
-from sqlite3 import Error
-#from setup_db import create_connection
-import logging
-from dotenv import load_dotenv
-load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Set up the MongoDB client
+client = MongoClient('mongodb://jubei:amaitaro@localhost:27017/')  # Connect to your MongoDB
+db = client.deemos 
+vip = db.vip  # Access the 'vip' collection
 
-def create_connection():
-    conn = None;
-    try:
-        #conn = sqlite3.connect(':memory:')  # create a database in RAM
-        # for a persistent database use the following line
-        conn = sqlite3.connect('vip.db')
-        logger.info(f'successful connection with sqlite version %s',{sqlite3.version})
-    except Error as e:
-        logger.info('%s',e)
-    
-    if conn:
-        return conn
-    return None
+# Get the session_id
+session_id = os.getenv('SESSIONID', '0')
 
-def give_points(conn, id):
-    c = conn.cursor()
-    try:
-        today = time.strftime('%Y-%m-%d', time.gmtime())
+# Set interval
+interval_in_minutes = 5
+minutes_requirement_if_success = 15
+minutes_requirement_if_failure = 120
 
-        # Check if the player already has 20 minutes today
-        c.execute("SELECT minutes, last_updated_day FROM vip WHERE steam_id = ?", (id,))
-        result = c.fetchone()
-        if result is not None and result[1] == today and result[0] >= 20:
-            return
-
-        # If the id doesn't exist, create it and set minutes to 5
-        # If the id exists but last_updated_day is not today, reset minutes to 5 and set last_updated_day to today
-        c.execute('''
-            INSERT INTO vip (steam_id, minutes, last_updated_day)
-            VALUES (?, 5, ?)
-            ON CONFLICT (steam_id) DO UPDATE SET minutes = (CASE WHEN last_updated_day = ? THEN minutes + 5 ELSE 5 END), last_updated_day = ?;
-        ''', (id, today, today, today))
-
-        conn.commit()
-
-    except Error as e:
-        logger.info('%s',e)
-
-def seeded(data):
-    if len(data['result']) >= 50:
-        return True
-    return False
-
-
-def add_vip(steam_id, player_name, expiration_timestamp):
-    session_id = os.getenv('SESSIONID', '0')
+while True:
     cookies = {'sessionid': session_id}
-    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
-    params = {'steam_id_64': steam_id, 'name': player_name, 'expiration': expiration_date}
-    try:
-        response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
-        response.raise_for_status()  # Raise an exception if the response was unsuccessful
-    except requests.exceptions.RequestException as err:
-        print ("An error occurred: ", err)
-        conn.execute("INSERT INTO failed_players (steam_id, player_name, expiration_timestamp) VALUES (?, ?, ?);",
-                     (steam_id, player_name, expiration_timestamp))
-    else:
-        # Check response status contents
-        data = response.json()
-        if data['failed'] != False:
-            logger.info(f'Error in API response:', data)
-            conn.execute("INSERT INTO failed_players (steam_id, player_name, expiration_timestamp) VALUES (?, ?, ?);",
-                        (steam_id, player_name, expiration_timestamp))
-        else:
-            # Remove the player from the failed_players list
-            conn.execute("DELETE FROM failed_players WHERE steam_id = ? AND player_name = ? AND expiration_timestamp = ?;",
-                        (steam_id, player_name, expiration_timestamp))
-            
-def job(conn):
-    c = conn.cursor()
-    session_id = os.getenv('SESSIONID', '0')
-    cookies = {'sessionid': session_id}
+     # Check for players with pending_award: true and make API call for each
+    pending_award_players = vip.find({'pending_award': True})
+    for player in pending_award_players:
+        steam_id_64 = player['steam_id_64']
+        player_name = player['name']
+        expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
+        expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
+        params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
+        try:
+            response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
+            response.raise_for_status()
+            vip.update_one(
+                {'steam_id_64': steam_id_64},
+                {
+                    '$set': {'pending_award': False}, # reset 'pending_award'
+                }
+            )
+        except requests.exceptions.RequestException as err:
+            print(f"An error occurred while adding VIP status: {err}")
+            print(f"Will try again in {interval_in_minutes} minutes")
     try:
         response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
         print ("An error occurred: ", err)
     else:
-        # Check response status contents
         data = response.json()
         if data['failed'] != False:
-            logger.info(f'Error in API response:  %s', data)
-            return  # Skip the rest of the function if there was an error
+            print(f'Error in API response: {data}')
+        else:
+            for player in data['result']:
+                steam_id_64 = player['steam_id_64']
+                player_name = player['name']
 
-    players = len(data['result'])
+                # Find the document for this player
+                doc = vip.find_one({'steam_id_64': steam_id_64})
 
-    for player in data['result']:
-        # logger.info('%s',player['name'])
-        # Give points to player
-        give_points(conn, player['steam_id_64'])
+                if doc:
+                    # Update the document
+                    vip.update_one(
+                        {'steam_id_64': steam_id_64},
+                        {'$inc': {'minutes_today': interval_in_minutes}}  # Increment the 'minutes_today' field by interval
+                    )
+                    doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document again to get updated 'minutes_today'
+                else:
+                    # Create a new document for this player
+                    vip.insert_one({
+                        'discord_id': '',
+                        'minutes_today': interval_in_minutes,
+                        'successful_dates': [],
+                        'pending_award': False,
+                        'steam_id_64': steam_id_64
+                    })
+                    doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
-        # fetch player record from database
-        c.execute("SELECT minutes, successfully_seeded FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
-        
-        result = c.fetchone()
-        # if seeding for more than 20 mins and successful seeding OR if seeding for 2 hrs
-        if result is not None and ((result[0] >= 20 and seeded(data)) or (result[0] >= 120)) and result[1] == 0:
-            # Update successfully_seeded
-            c.execute('''
-                UPDATE vip SET successfully_seeded = 1 WHERE steam_id = ?;
-            ''', (player['steam_id_64'],))
+                # Check award condition
+                if (len(data['result']) >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
 
-            # Update successful_seeding_days
-            c.execute('''
-                UPDATE vip SET successful_seeding_days = successful_seeding_days + 1 WHERE steam_id = ?;
-            ''', (player['steam_id_64'],))
+                    # Make external API call
+                    expiration_timestamp = time.time() + (24 * 60 * 60-minutes_requirement_if_success)  # 24 hours in the future
+                    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
+                    params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
+                    vip.update_one(
+                        {'steam_id_64': steam_id_64},
+                        {
+                            '$push': {'successful_dates': datetime.utcnow()}  # Add the current date and time to 'successful_dates'
+                        }
+                    )
+                    try:
+                        response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
+                        response.raise_for_status()
+                    except requests.exceptions.RequestException as err:
+                        print(f"An error occurred while adding VIP status: {err}")
+                        # save it to try again later
+                        vip.update_one(
+                            {'steam_id_64': steam_id_64},
+                            {
+                                '$set': {'pending_award': True}, # Set 'pending_award' to true
+                            }
+                        )
 
-            # Add VIP for 1 day
-            current_time = time.time()
-            add_vip(player['steam_id_64'], player['name'], int(current_time + (1 * 24 * 60 * 60)))  # 1 day in seconds)
-            logger.info(f'One Day VIP added for  %s',player['name'])
-
-        # Check if player has successfully seeded for 7 days in the last 30 days
-        c.execute("SELECT successful_seeding_days FROM vip WHERE steam_id = ?", (player['steam_id_64'],))
-        
-        result = c.fetchone()
-        if result is not None and result[0] >= 7:
-            # Add VIP for 30 days
-            current_time = time.time()
-            add_vip(player['steam_id_64'], player['name'], int(current_time + (30 * 24 * 60 * 60)))  # 30 days in seconds
-            logger.info(f'One Month VIP added for  %s',player['name'])
-
-    conn.commit()
-
-    #in case the hll rcon server was down earlier
-    for player in conn.execute("SELECT * FROM failed_players").fetchall():
-        add_vip(conn, *player)
-        
-    logger.info(f'Ran job no of players: %s',players) 
-
-conn = create_connection()
-schedule.every(5).minutes.do(job,conn)
-
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+    # Sleep for interval (converted to seconds)
+    time.sleep(interval_in_minutes * 60)
