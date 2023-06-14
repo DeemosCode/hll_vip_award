@@ -17,6 +17,34 @@ interval_in_minutes = 5
 minutes_requirement_if_success = 15
 minutes_requirement_if_failure = 120
 
+def award_vip(steam_id_64, player_name, expiration_date):
+    # Make external API call
+    params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
+    vip.update_one(
+        {'steam_id_64': steam_id_64},
+        {
+            '$push': {'successful_dates': datetime.utcnow()}  # Add the current date and time to 'successful_dates'
+        }
+    )
+    try:
+        response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
+        response.raise_for_status()
+        vip.update_one(
+            {'steam_id_64': steam_id_64},
+            {
+                '$set': {'pending_award': False}, # reset 'pending_award'
+            }
+        )
+    except requests.exceptions.RequestException as err:
+        print(f"An error occurred while adding VIP status: {err}")
+        # save it to try again later
+        vip.update_one(
+            {'steam_id_64': steam_id_64},
+            {
+                '$set': {'pending_award': True}, # Set 'pending_award' to true
+            }
+        )
+
 while True:
     cookies = {'sessionid': session_id}
      # Check for players with pending_award: true and make API call for each
@@ -26,19 +54,8 @@ while True:
         player_name = player['name']
         expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
         expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
-        params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
-        try:
-            response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
-            response.raise_for_status()
-            vip.update_one(
-                {'steam_id_64': steam_id_64},
-                {
-                    '$set': {'pending_award': False}, # reset 'pending_award'
-                }
-            )
-        except requests.exceptions.RequestException as err:
-            print(f"An error occurred while adding VIP status: {err}")
-            print(f"Will try again in {interval_in_minutes} minutes")
+        award_vip(steam_id_64,player_name,expiration_date)
+        
     try:
         response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
@@ -78,27 +95,9 @@ while True:
                 if (len(data['result']) >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
 
                     # Make external API call
-                    expiration_timestamp = time.time() + (24 * 60 * 60-minutes_requirement_if_success)  # 24 hours in the future
+                    expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
                     expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
-                    params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
-                    vip.update_one(
-                        {'steam_id_64': steam_id_64},
-                        {
-                            '$push': {'successful_dates': datetime.utcnow()}  # Add the current date and time to 'successful_dates'
-                        }
-                    )
-                    try:
-                        response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
-                        response.raise_for_status()
-                    except requests.exceptions.RequestException as err:
-                        print(f"An error occurred while adding VIP status: {err}")
-                        # save it to try again later
-                        vip.update_one(
-                            {'steam_id_64': steam_id_64},
-                            {
-                                '$set': {'pending_award': True}, # Set 'pending_award' to true
-                            }
-                        )
+                    award_vip(steam_id_64,player_name,expiration_date)
 
     # Sleep for interval (converted to seconds)
     time.sleep(interval_in_minutes * 60)
