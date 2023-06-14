@@ -3,9 +3,12 @@ import time
 import requests
 from pymongo import MongoClient
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from dotenv import load_dotenv
+load_dotenv()
 
 # Set up the MongoDB client
-client = MongoClient('mongodb://jubei:amaitaro@localhost:27017/')  # Connect to your MongoDB
+client = MongoClient('mongodb://127.0.0.1:27017/')  # Connect to your MongoDB
 db = client.deemos 
 vip = db.vip  # Access the 'vip' collection
 
@@ -16,6 +19,26 @@ session_id = os.getenv('SESSIONID', '0')
 interval_in_minutes = 5
 minutes_requirement_if_success = 15
 minutes_requirement_if_failure = 120
+
+
+def calculate_expiration_date(steam_id_64, minutes_requirement):
+    # Fetch the player document
+    player_doc = vip.find_one({'steam_id_64': steam_id_64})
+    successful_dates = player_doc['successful_dates']
+
+    # Count successful days in current calendar month
+    successful_days_current_month = sum(1 for date in successful_dates if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
+
+    if successful_days_current_month >= 7:
+        # If player has been successful for 7 or more days this month, set expiration to 30 days in the future
+        expiration_timestamp = time.time() + (30 * 24 * 60 * 60)
+    else:
+        # Otherwise, set expiration to 24 hours in the future, minus the minutes requirement
+        expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement)
+
+    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
+    return expiration_date
+
 
 def award_vip(steam_id_64, player_name, expiration_date):
     # Make external API call
@@ -54,8 +77,7 @@ while True:
     for player in pending_award_players:
         steam_id_64 = player['steam_id_64']
         player_name = player['name']
-        expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
-        expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
+        expiration_date = datetime.utcfromtimestamp(time.time() + (24 * 60 * 60 - minutes_requirement_if_success)).isoformat()
         award_vip(steam_id_64,player_name,expiration_date)
         
     try:
@@ -65,7 +87,7 @@ while True:
         print ("An error occurred: ", err)
     else:
         data = response.json()
-        no_of_players= data['result']
+        no_of_players= len(data['result'])
         if data['failed'] != False:
             print(f'Error in API response: {data}')
         else:
@@ -102,6 +124,6 @@ while True:
                     expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
                     award_vip(steam_id_64,player_name,expiration_date)
 
-    print("Ran job - No of players : {no_of_players}")    
+    print(f"Ran job - No of players : {no_of_players}")    
     # Sleep for interval (converted to seconds)
     time.sleep(interval_in_minutes * 60)
