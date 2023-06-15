@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import schedule
 from pymongo import MongoClient
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -69,7 +70,7 @@ def award_vip(steam_id_64, player_name, expiration_date):
             }
         )
 
-while True:
+def job():
     no_of_players=0
     cookies = {'sessionid': session_id}
      # Check for players with pending_award: true and make API call for each
@@ -125,5 +126,10 @@ while True:
                     award_vip(steam_id_64,player_name,expiration_date)
 
     print(f"Ran job - No of players : {no_of_players}")    
-    # Sleep for interval (converted to seconds)
-    time.sleep(interval_in_minutes * 60)
+
+schedule.every(interval_in_minutes).minutes.do(job)
+
+# Keep the script running.
+while True:
+    schedule.run_pending()
+    time.sleep(1)
