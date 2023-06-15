@@ -25,10 +25,10 @@ minutes_requirement_if_failure = 120
 def calculate_expiration_date(steam_id_64, minutes_requirement):
     # Fetch the player document
     player_doc = vip.find_one({'steam_id_64': steam_id_64})
-    successful_dates = player_doc['successful_dates']
+    dates_seeded_successfully = player_doc['dates_seeded_successfully']
 
     # Count successful days in current calendar month
-    successful_days_current_month = sum(1 for date in successful_dates if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
+    successful_days_current_month = sum(1 for date in dates_seeded_successfully if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
 
     if successful_days_current_month >= 7:
         # If player has been successful for 7 or more days this month, set expiration to 30 days in the future
@@ -45,11 +45,11 @@ def award_vip(steam_id_64, player_name, expiration_date):
     # Fetch the document for this player
     player_doc = vip.find_one({'steam_id_64': steam_id_64})
 
-    # Convert successful_dates to dates only (no time) for comparison
-    successful_dates_only = [date.date() for date in player_doc['successful_dates']]
+    # Convert dates_seeded_successfully to dates only (no time) for comparison
+    dates_seeded_successfully_only = [date.date() for date in player_doc['dates_seeded_successfully']]
 
-    # If today's date is already in successful_dates, return early
-    if datetime.utcnow().date() in successful_dates_only:
+    # If today's date is already in dates_seeded_successfully, return early
+    if datetime.utcnow().date() in dates_seeded_successfully_only:
         return
 
     # Update the document
@@ -57,7 +57,7 @@ def award_vip(steam_id_64, player_name, expiration_date):
     vip.update_one(
         {'steam_id_64': steam_id_64},
         {
-            '$push': {'successful_dates': datetime.utcnow()}  # Add the current date and time to 'successful_dates'
+            '$push': {'dates_seeded_successfully': datetime.utcnow()}  # Add the current date and time to 'dates_seeded_successfully'
         }
     )
     try:
@@ -121,9 +121,11 @@ def job():
                     vip.insert_one({
                         'discord_id': '',
                         'minutes_today': interval_in_minutes,
-                        'successful_dates': [],
                         'pending_award': False,
-                        'steam_id_64': steam_id_64
+                        'steam_id_64': steam_id_64,
+                        'dates_seeded_successfully': [],
+                        'dates_played_war' : [],
+                        'dates_played_training' : []
                     })
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
