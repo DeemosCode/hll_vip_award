@@ -121,13 +121,14 @@ def job():
                     vip.insert_one({
                         'discord_id': '',
                         'name': player_name,
-                        'minutes_today': interval_in_minutes,
+                        'minutes_today': interval_in_minutes-2,
                         'pending_award': False,
                         'steam_id_64': steam_id_64,
                         'dates_seeded_successfully': [],
                         'dates_played_war' : [],
                         'dates_played_training' : []
                     })
+                    break
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
                 # Check award condition
