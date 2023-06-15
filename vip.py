@@ -42,7 +42,17 @@ def calculate_expiration_date(steam_id_64, minutes_requirement):
 
 
 def award_vip(steam_id_64, player_name, expiration_date):
-    # Make external API call
+    # Fetch the document for this player
+    player_doc = vip.find_one({'steam_id_64': steam_id_64})
+
+    # Convert successful_dates to dates only (no time) for comparison
+    successful_dates_only = [date.date() for date in player_doc['successful_dates']]
+
+    # If today's date is already in successful_dates, return early
+    if datetime.utcnow().date() in successful_dates_only:
+        return
+
+    # Update the document
     params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
     vip.update_one(
         {'steam_id_64': steam_id_64},
