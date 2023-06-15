@@ -120,6 +120,7 @@ def job():
                     # Create a new document for this player
                     vip.insert_one({
                         'discord_id': '',
+                        'name': player_name,
                         'minutes_today': interval_in_minutes,
                         'pending_award': False,
                         'steam_id_64': steam_id_64,
