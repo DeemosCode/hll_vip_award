@@ -26,6 +26,7 @@ minutes_requirement_if_failure = 120
 def calculate_expiration_date(player_doc):
     # Fetch the player document
     dates_seeded_successfully = player_doc['dates_seeded_successfully']
+    steam_id_64 = player_doc['steam_id_64']
 
     # Count successful days in current calendar month
     successful_days_current_month = sum(1 for date in dates_seeded_successfully if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
@@ -40,6 +41,12 @@ def calculate_expiration_date(player_doc):
         last_day_of_month = calendar.monthrange(current_year, current_month)[1]  # Get the last day of the current month
         expiration_date = datetime(current_year, current_month, last_day_of_month, 23, 59, 59).isoformat()  # Set the expiration to the end of the current month
         is_end_of_month = True
+        vip.update_one(
+                {'steam_id_64': steam_id_64},
+                {
+                    '$set': {'vip_this_month': True}  
+                }
+            )
     else:
         # Otherwise, set expiration to 24 hours in the future
         expiration_timestamp = time.time() + (24 * 60 * 60)
