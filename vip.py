@@ -22,9 +22,8 @@ minutes_requirement_if_success = 15
 minutes_requirement_if_failure = 120
 
 
-def calculate_expiration_date(steam_id_64, minutes_requirement):
+def calculate_expiration_date(player_doc):
     # Fetch the player document
-    player_doc = vip.find_one({'steam_id_64': steam_id_64})
     dates_seeded_successfully = player_doc['dates_seeded_successfully']
 
     # Count successful days in current calendar month
@@ -35,15 +34,16 @@ def calculate_expiration_date(steam_id_64, minutes_requirement):
         expiration_timestamp = time.time() + (30 * 24 * 60 * 60)
     else:
         # Otherwise, set expiration to 24 hours in the future, minus the minutes requirement
-        expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement)
+        expiration_timestamp = time.time() + (24 * 60 * 60)
 
     expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
     return expiration_date
 
 
-def award_vip(steam_id_64, player_name, expiration_date):
+def award_vip(steam_id_64, player_name):
     # Fetch the document for this player
     player_doc = vip.find_one({'steam_id_64': steam_id_64})
+    expiration_date = calculate_expiration_date(player_doc)
 
     # Convert dates_seeded_successfully to dates only (no time) for comparison
     dates_seeded_successfully_only = [date.date() for date in player_doc['dates_seeded_successfully']]
@@ -126,7 +126,8 @@ def job():
                         'steam_id_64': steam_id_64,
                         'dates_seeded_successfully': [],
                         'dates_played_war' : [],
-                        'dates_played_training' : []
+                        'dates_played_training' : [],
+                        'geforce_now': False
                     })
                     break
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
@@ -135,9 +136,7 @@ def job():
                 if (no_of_players >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
 
                     # Make external API call
-                    expiration_timestamp = time.time() + (24 * 60 * 60 - minutes_requirement_if_success)  # 24 hours in the future
-                    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
-                    award_vip(steam_id_64,player_name,expiration_date)
+                    award_vip(steam_id_64,player_name)
 
     print(f"Ran job - No of players : {no_of_players}")    
 
