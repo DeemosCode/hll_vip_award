@@ -2,6 +2,7 @@ import os
 import time
 import requests
 import schedule
+import calendar
 from pymongo import MongoClient
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -30,13 +31,16 @@ def calculate_expiration_date(player_doc):
     successful_days_current_month = sum(1 for date in dates_seeded_successfully if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
 
     if successful_days_current_month >= 7:
-        # If player has been successful for 7 or more days this month, set expiration to 30 days in the future
-        expiration_timestamp = time.time() + (30 * 24 * 60 * 60)
+        # If player has been successful for 7 or more days this month, set expiration to the end of the current month
+        current_year = datetime.utcnow().year
+        current_month = datetime.utcnow().month
+        last_day_of_month = calendar.monthrange(current_year, current_month)[1]  # Get the last day of the current month
+        expiration_date = datetime(current_year, current_month, last_day_of_month, 23, 59, 59).isoformat()  # Set the expiration to the end of the current month
     else:
-        # Otherwise, set expiration to 24 hours in the future, minus the minutes requirement
+        # Otherwise, set expiration to 24 hours in the future
         expiration_timestamp = time.time() + (24 * 60 * 60)
+        expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
 
-    expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
     return expiration_date
 
 
@@ -60,6 +64,8 @@ def award_vip(steam_id_64, player_name):
             '$push': {'dates_seeded_successfully': datetime.utcnow()}  # Add the current date and time to 'dates_seeded_successfully'
         }
     )
+
+    # try to make the api call    
     try:
         response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
         response.raise_for_status()
@@ -127,7 +133,8 @@ def job():
                         'dates_seeded_successfully': [],
                         'dates_played_war' : [],
                         'dates_played_training' : [],
-                        'geforce_now': False
+                        'geforce_now': False,
+                        'level': 'recruit'
                     })
                     break
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
