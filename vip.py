@@ -24,37 +24,58 @@ minutes_requirement_if_failure = 120
 
 
 def calculate_expiration_date(player_doc):
-    # Fetch the player document
-    dates_seeded_successfully = player_doc['dates_seeded_successfully']
-    steam_id_64 = player_doc['steam_id_64']
+    # Fetch the participation records
+    participation_records = player_doc['participation']
+
+    # Fetch dates from participation records for 'seed' type in the current calendar month
+    current_year = datetime.utcnow().year
+    current_month = datetime.utcnow().month
+    dates_seeded_successfully = [datetime.fromisoformat(rec[0]) for rec in participation_records if rec[1] == "seed" and datetime.fromisoformat(rec[0]).year == current_year and datetime.fromisoformat(rec[0]).month == current_month]
 
     # Count successful days in current calendar month
-    successful_days_current_month = sum(1 for date in dates_seeded_successfully if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
+    successful_days_current_month = len(dates_seeded_successfully)
 
-    #initializing variable
-    player_already_has_vip_until_end_of_month = False
+    # Initializing variable
+    is_end_of_month = False
 
-    if successful_days_current_month >= 7 or (player_doc['geforce_now']==True):
+    if successful_days_current_month >= 7:
         # If player has been successful for 7 or more days this month, set expiration to the end of the current month
-        current_year = datetime.utcnow().year
-        current_month = datetime.utcnow().month
         last_day_of_month = calendar.monthrange(current_year, current_month)[1]  # Get the last day of the current month
         expiration_date = datetime(current_year, current_month, last_day_of_month, 23, 59, 59).isoformat()  # Set the expiration to the end of the current month
-        player_already_has_vip_until_end_of_month = True
-        #todo: at the start of every month check that this is reset for all players
-        vip.update_one(
-                {'steam_id_64': steam_id_64},
-                {
-                    '$set': {'vip_this_month': True}  
-                }
-            )
+        is_end_of_month = True
     else:
         # Otherwise, set expiration to 24 hours in the future
         expiration_timestamp = time.time() + (24 * 60 * 60)
         expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
 
-    return (expiration_date, player_already_has_vip_until_end_of_month)
+    return (expiration_date, is_end_of_month)
 
+def check_and_promote_deemocrat():
+    # Fetch all players
+    all_players = vip.find({})
+    current_month = datetime.utcnow().month
+    current_year = datetime.utcnow().year
+
+    # Iterate through all players and perform tasks
+    for player in all_players:
+        steam_id_64 = player['steam_id_64']
+
+
+        # Count days player played war or training in current calendar month
+        days_played_war_this_month = sum(1 for rec in player['participation'] if rec[1] == 'war' and datetime.fromisoformat(rec[0]).month == current_month and datetime.fromisoformat(rec[0]).year == current_year)
+        days_played_training_this_month = sum(1 for rec in player['participation'] if rec[1] == 'training' and datetime.fromisoformat(rec[0]).month == current_month and datetime.fromisoformat(rec[0]).year == current_year)
+
+        # If player played war or training 3 or more days this month, set level to 'deemocrat'
+        if (days_played_war_this_month + days_played_training_this_month) >= 3:
+            vip.update_one(
+                {'steam_id_64': steam_id_64},
+                {
+                    '$set': {'level': 'deemocrat'}  # Set 'level' to 'deemocrat'
+                }
+            )
+            print(f"PROMOTION TO DEEMOCRAT for {player['name']}")
+
+    print("Checked for deemocrat promotions")
 
 def award_vip(steam_id_64, player_name):
     # Fetch the document for this player
@@ -64,37 +85,18 @@ def award_vip(steam_id_64, player_name):
     expiration_date = date_calc_result[0]
 
     # Convert dates_seeded_successfully to dates only (no time) for comparison
-    dates_seeded_successfully_only = [date.date() for date in player_doc['dates_seeded_successfully']]
+    dates_seeded_successfully_only = [datetime.fromisoformat(rec[0]).date() for rec in player_doc['participation'] if rec[1] == 'seed']
 
     # If today's date is already in dates_seeded_successfully, return early
     if datetime.utcnow().date() in dates_seeded_successfully_only:
         return
-    
-    current_month = datetime.utcnow().month
-    current_year = datetime.utcnow().year
-
-    # Check if player has vip this month
-    if has_vip_this_month:
-        # Count days player played war or training in current calendar month
-        days_played_war_this_month = sum(1 for date in player_doc['dates_played_war'] if date.month == current_month and date.year == current_year)
-        days_played_training_this_month = sum(1 for date in player_doc['dates_played_training'] if date.month == current_month and date.year == current_year)
-
-        # If player played war or training 3 or more days this month, set level to 'deemocrat'
-        if ((days_played_war_this_month + days_played_training_this_month) >= 3):
-            vip.update_one(
-                {'steam_id_64': steam_id_64},
-                {
-                    '$set': {'level': 'deemocrat'}  # Set 'level' to 'deemocrat'
-                }
-            )
-            print(f"PROMOTION TO DEEMOCRAT for {player_doc['name']}")
 
     # Update the document
     params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
     vip.update_one(
         {'steam_id_64': steam_id_64},
         {
-            '$push': {'dates_seeded_successfully': datetime.utcnow()}  # Add the current date and time to 'dates_seeded_successfully'
+            '$push': {'participation': [datetime.utcnow().isoformat(), 'seed']}  # Add the current date and time to 'participation' with 'seed' as participation type
         }
     )
 
@@ -180,6 +182,7 @@ def job():
     print(f"Ran job - No of players : {no_of_players}")    
 
 schedule.every(interval_in_minutes).minutes.do(job)
+schedule.every(1).hours.do(check_and_promote_deemocrat)
 
 # Keep the script running.
 while True:
