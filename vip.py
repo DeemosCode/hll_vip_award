@@ -32,7 +32,7 @@ def calculate_expiration_date(player_doc):
     successful_days_current_month = sum(1 for date in dates_seeded_successfully if date.month == datetime.utcnow().month and date.year == datetime.utcnow().year)
 
     #initializing variable
-    is_end_of_month = False
+    player_already_has_vip_until_end_of_month = False
 
     if successful_days_current_month >= 7 or (player_doc['geforce_now']==True):
         # If player has been successful for 7 or more days this month, set expiration to the end of the current month
@@ -40,7 +40,8 @@ def calculate_expiration_date(player_doc):
         current_month = datetime.utcnow().month
         last_day_of_month = calendar.monthrange(current_year, current_month)[1]  # Get the last day of the current month
         expiration_date = datetime(current_year, current_month, last_day_of_month, 23, 59, 59).isoformat()  # Set the expiration to the end of the current month
-        is_end_of_month = True
+        player_already_has_vip_until_end_of_month = True
+        #todo: at the start of every month check that this is reset for all players
         vip.update_one(
                 {'steam_id_64': steam_id_64},
                 {
@@ -52,7 +53,7 @@ def calculate_expiration_date(player_doc):
         expiration_timestamp = time.time() + (24 * 60 * 60)
         expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
 
-    return (expiration_date, is_end_of_month)
+    return (expiration_date, player_already_has_vip_until_end_of_month)
 
 
 def award_vip(steam_id_64, player_name):
@@ -162,9 +163,7 @@ def job():
                         'minutes_today': interval_in_minutes-2,
                         'pending_award': False,
                         'steam_id_64': steam_id_64,
-                        'dates_seeded_successfully': [],
-                        'dates_played_war' : [],
-                        'dates_played_training' : [],
+                        'participation': [],
                         'geforce_now': False,
                         'level': 'recruit',
                         'vip_this_month':False,
