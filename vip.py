@@ -37,19 +37,19 @@ def calculate_expiration_date(player_doc):
     successful_days_current_month = len(dates_seeded_successfully)
 
     # Initializing variable
-    is_end_of_month = False
+    has_vip_until_end_of_month = False
 
     if successful_days_current_month >= 7:
         # If player has been successful for 7 or more days this month, set expiration to the end of the current month
         last_day_of_month = calendar.monthrange(current_year, current_month)[1]  # Get the last day of the current month
         expiration_date = datetime(current_year, current_month, last_day_of_month, 23, 59, 59).isoformat()  # Set the expiration to the end of the current month
-        is_end_of_month = True
+        has_vip_until_end_of_month = True
     else:
         # Otherwise, set expiration to 24 hours in the future
         expiration_timestamp = time.time() + (24 * 60 * 60)
         expiration_date = datetime.utcfromtimestamp(expiration_timestamp).isoformat()
 
-    return (expiration_date, is_end_of_month)
+    return (expiration_date, has_vip_until_end_of_month)
 
 def check_and_promote_deemocrat():
     # Fetch all players
