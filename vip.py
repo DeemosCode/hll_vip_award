@@ -27,8 +27,16 @@ SESSION_ID = os.getenv('SESSIONID', '0')
 INTERVAL_IN_MINUTES = 5
 MINUTES_REQUIREMENT_IF_SUCCESS = 15
 MINUTES_REQUIREMENT_IF_FAILURE = 120
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
 cookies = {'sessionid': SESSION_ID}
 
+
+def post_to_discord(content):
+    data = {"content": content}
+    response = requests.post(DISCORD_WEBHOOK_URL, json=data)
+
+    if response.status_code != 204:
+        print(f"Failed to send message to Discord: {response.text}")
 
 def calculate_expiration_date(player_doc):
     # Fetch the participation records
@@ -81,20 +89,7 @@ def check_and_promote_deemocrat():
                 }
             )
             log.info(f"PROMOTION TO DEEMOCRAT for {player['name']}")
-
-            # Prepare data for webhook
-            webhook_url = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
-            discord_data = {
-                "content": f"PROMOTION TO DEEMOCRAT for {player['name']}"
-            }
-
-            # Post message to discord channel through webhook
-            response = requests.post(webhook_url, json=discord_data)
-
-            # Check for errors
-            if response.status_code != 204:
-                log.info(f"Failed to send message to Discord: {response.text}")
-
+            post_to_discord(f"PROMOTION TO DEEMOCRAT for {player['name']}")
 
     log.info("Checked for deemocrat promotions")
 
