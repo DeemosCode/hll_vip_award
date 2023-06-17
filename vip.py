@@ -15,12 +15,13 @@ db = client.deemos
 vip = db.vip  # Access the 'vip' collection
 
 # Get the session_id
-session_id = os.getenv('SESSIONID', '0')
+SESSION_ID = os.getenv('SESSIONID', '0')
 
 # Set interval
-interval_in_minutes = 5
-minutes_requirement_if_success = 15
-minutes_requirement_if_failure = 120
+INTERVAL_IN_MINUTES = 1
+MINUTES_REQUIREMENT_IF_SUCCESS = 15
+MINUTES_REQUIREMENT_IF_FAILURE = 120
+cookies = {'sessionid': SESSION_ID}
 
 
 def calculate_expiration_date(player_doc):
@@ -75,6 +76,20 @@ def check_and_promote_deemocrat():
             )
             print(f"PROMOTION TO DEEMOCRAT for {player['name']}")
 
+            # Prepare data for webhook
+            webhook_url = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
+            discord_data = {
+                "content": f"PROMOTION TO DEEMOCRAT for {player['name']}"
+            }
+
+            # Post message to discord channel through webhook
+            response = requests.post(webhook_url, json=discord_data)
+
+            # Check for errors
+            if response.status_code != 204:
+                print(f"Failed to send message to Discord: {response.text}")
+
+
     print("Checked for deemocrat promotions")
 
 def award_vip(steam_id_64, player_name):
@@ -84,6 +99,7 @@ def award_vip(steam_id_64, player_name):
     has_vip_this_month = date_calc_result[1]
     expiration_date = date_calc_result[0]
 
+
     # Convert dates_seeded_successfully to dates only (no time) for comparison
     dates_seeded_successfully_only = [datetime.fromisoformat(rec[0]).date() for rec in player_doc['participation'] if rec[1] == 'seed']
 
@@ -91,15 +107,10 @@ def award_vip(steam_id_64, player_name):
     if datetime.utcnow().date() in dates_seeded_successfully_only:
         return
 
-    # Update the document
+    # parameters for http request
+    # check cookies
     params = {'steam_id_64': steam_id_64, 'name': player_name, 'expiration': expiration_date}
-    vip.update_one(
-        {'steam_id_64': steam_id_64},
-        {
-            '$push': {'participation': [datetime.utcnow().isoformat(), 'seed']}  # Add the current date and time to 'participation' with 'seed' as participation type
-        }
-    )
-
+    
     # try to make the api call    
     try:
         response = requests.get('http://server.deemos.club/api/do_add_vip', cookies=cookies, params=params)
@@ -108,7 +119,9 @@ def award_vip(steam_id_64, player_name):
             {'steam_id_64': steam_id_64},
             {
                 '$set': {'pending_award': False}, # reset 'pending_award'
-            }
+                '$set': {'minutes_today': 0},  # reset to 0
+                '$push': {'participation': [datetime.utcnow().isoformat(), 'seed']}  # Add the current date and time to 'participation' with 'seed' as participation type
+                }
         )
         print(f"VIP Awarded to {steam_id_64} {player_name} {datetime.utcnow()}")
     except requests.exceptions.RequestException as err:
@@ -121,16 +134,17 @@ def award_vip(steam_id_64, player_name):
             }
         )
 
-def job():
-    no_of_players=0
-    cookies = {'sessionid': session_id}
+def award_pending():
      # Check for players with pending_award: true and make API call for each
     pending_award_players = vip.find({'pending_award': True})
     for player in pending_award_players:
         steam_id_64 = player['steam_id_64']
         player_name = player['name']
-        expiration_date = datetime.utcfromtimestamp(time.time() + (24 * 60 * 60 - minutes_requirement_if_success)).isoformat()
-        award_vip(steam_id_64,player_name,expiration_date)
+        award_vip(steam_id_64,player_name)
+
+def job():
+    no_of_players=0
+    cookies = {'sessionid': SESSION_ID}
         
     try:
         response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
@@ -154,7 +168,7 @@ def job():
                     # Update the document
                     vip.update_one(
                         {'steam_id_64': steam_id_64},
-                        {'$inc': {'minutes_today': interval_in_minutes}}  # Increment the 'minutes_today' field by interval
+                        {'$inc': {'minutes_today': INTERVAL_IN_MINUTES}}  # Increment the 'minutes_today' field by interval
                     )
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document again to get updated 'minutes_today'
                 else:
@@ -162,7 +176,7 @@ def job():
                     vip.insert_one({
                         'discord_id': '',
                         'name': player_name,
-                        'minutes_today': interval_in_minutes-2,
+                        'minutes_today': INTERVAL_IN_MINUTES,
                         'pending_award': False,
                         'steam_id_64': steam_id_64,
                         'participation': [],
@@ -174,14 +188,15 @@ def job():
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
                 # Check award condition
-                if (no_of_players >= 50 and doc['minutes_today'] >= minutes_requirement_if_success) or (doc['minutes_today'] >= minutes_requirement_if_failure):
+                if (no_of_players >= 50 and doc['minutes_today'] >= MINUTES_REQUIREMENT_IF_SUCCESS) or (doc['minutes_today'] >= MINUTES_REQUIREMENT_IF_FAILURE):
 
                     # Make external API call
                     award_vip(steam_id_64,player_name)
 
+
     print(f"Ran job - No of players : {no_of_players}")    
 
-schedule.every(interval_in_minutes).minutes.do(job)
+schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
 schedule.every(1).hours.do(check_and_promote_deemocrat)
 
 # Keep the script running.
