@@ -11,6 +11,10 @@ from systemd import journal
 from dotenv import load_dotenv
 load_dotenv()
 
+log = logging.getLogger('vip')
+log.addHandler(journal.JournaldLogHandler())
+log.setLevel(logging.INFO)
+
 # Set up the MongoDB client
 client = MongoClient('mongodb://127.0.0.1:27017/')  # Connect to your MongoDB
 db = client.deemos 
@@ -20,7 +24,7 @@ vip = db.vip  # Access the 'vip' collection
 SESSION_ID = os.getenv('SESSIONID', '0')
 
 # Set interval
-INTERVAL_IN_MINUTES = 1
+INTERVAL_IN_MINUTES = 5
 MINUTES_REQUIREMENT_IF_SUCCESS = 15
 MINUTES_REQUIREMENT_IF_FAILURE = 120
 cookies = {'sessionid': SESSION_ID}
@@ -76,7 +80,7 @@ def check_and_promote_deemocrat():
                     '$set': {'level': 'deemocrat'}  # Set 'level' to 'deemocrat'
                 }
             )
-            print(f"PROMOTION TO DEEMOCRAT for {player['name']}")
+            log.info(f"PROMOTION TO DEEMOCRAT for {player['name']}")
 
             # Prepare data for webhook
             webhook_url = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
@@ -89,10 +93,10 @@ def check_and_promote_deemocrat():
 
             # Check for errors
             if response.status_code != 204:
-                print(f"Failed to send message to Discord: {response.text}")
+                log.info(f"Failed to send message to Discord: {response.text}")
 
 
-    print("Checked for deemocrat promotions")
+    log.info("Checked for deemocrat promotions")
 
 def award_vip(steam_id_64, player_name):
     # Fetch the document for this player
@@ -125,9 +129,9 @@ def award_vip(steam_id_64, player_name):
                 '$push': {'participation': [datetime.utcnow().isoformat(), 'seed']}  # Add the current date and time to 'participation' with 'seed' as participation type
                 }
         )
-        print(f"VIP Awarded to {steam_id_64} {player_name} {datetime.utcnow()}")
+        log.info(f"VIP Awarded to {steam_id_64} {player_name} {datetime.utcnow()}")
     except requests.exceptions.RequestException as err:
-        print(f"An error occurred while adding VIP status: {err}")
+        log.info(f"An error occurred while adding VIP status: {err}")
         # save it to try again later
         vip.update_one(
             {'steam_id_64': steam_id_64},
@@ -154,7 +158,7 @@ def reset_minutes_today():
                 '$set': {'minutes_today': 0}  # Reset 'minutes_today' to 0
             }
         )
-    print("Reset minutes_today for all players")
+    log.info("Reset minutes_today for all players")
 
 def job():
     no_of_players=0
@@ -164,12 +168,12 @@ def job():
         response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
-        print ("An error occurred: ", err)
+        log.info ("An error occurred: ", err)
     else:
         data = response.json()
         no_of_players= len(data['result'])
         if data['failed'] != False:
-            print(f'Error in API response: {data}')
+            log.info(f'Error in API response: {data}')
         else:
             for player in data['result']:
                 steam_id_64 = player['steam_id_64']
@@ -214,7 +218,7 @@ def job():
                     award_vip(steam_id_64,player_name)
 
 
-    print(f"Ran job - No of players : {no_of_players}")    
+    log.info(f"Ran job - No of players : {no_of_players}")    
 
 schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
 schedule.every(1).hours.do(check_and_promote_deemocrat)
