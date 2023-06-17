@@ -142,6 +142,18 @@ def award_pending():
         player_name = player['name']
         award_vip(steam_id_64,player_name)
 
+def reset_minutes_today():
+    all_players = vip.find({})
+    for player in all_players:
+        steam_id_64 = player['steam_id_64']
+        vip.update_one(
+            {'steam_id_64': steam_id_64},
+            {
+                '$set': {'minutes_today': 0}  # Reset 'minutes_today' to 0
+            }
+        )
+    print("Reset minutes_today for all players")
+
 def job():
     no_of_players=0
     cookies = {'sessionid': SESSION_ID}
@@ -165,6 +177,12 @@ def job():
                 doc = vip.find_one({'steam_id_64': steam_id_64})
 
                 if doc:
+                    # Convert dates_seeded_successfully to dates only (no time) for comparison
+                    dates_seeded_successfully_only = [datetime.fromisoformat(rec[0]).date() for rec in doc['participation'] if rec[1] == 'seed']
+
+                    # If today's date is already in dates_seeded_successfully, return early
+                    if datetime.utcnow().date() in dates_seeded_successfully_only:
+                        return
                     # Update the document
                     vip.update_one(
                         {'steam_id_64': steam_id_64},
@@ -198,6 +216,7 @@ def job():
 
 schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
 schedule.every(1).hours.do(check_and_promote_deemocrat)
+schedule.every().day.at("07:00").do(reset_minutes_today)  # Reset 'minutes_today' to 0 every day at 7AM
 
 # Keep the script running.
 while True:
