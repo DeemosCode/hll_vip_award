@@ -6,6 +6,8 @@ import calendar
 from pymongo import MongoClient
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import logging
+from systemd import journal
 from dotenv import load_dotenv
 load_dotenv()
 
