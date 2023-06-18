@@ -11,17 +11,17 @@ from systemd import journal
 from dotenv import load_dotenv
 load_dotenv()
 
+MONGO_CONNECTION_STRING = os.getenv('MONGO_CONNECTION_STRING')
+SESSION_ID = os.getenv('SESSIONID', '0')
+
 log = logging.getLogger('vip')
 log.addHandler(journal.JournaldLogHandler())
 log.setLevel(logging.INFO)
 
 # Set up the MongoDB client
-client = MongoClient('mongodb://127.0.0.1:27017/')  # Connect to your MongoDB
+client = MongoClient(MONGO_CONNECTION_STRING)  # Connect to your MongoDB
 db = client.deemos 
-vip = db.vip  # Access the 'vip' collection
-
-# Get the session_id
-SESSION_ID = os.getenv('SESSIONID', '0')
+vip = db.vip
 
 # Set interval
 INTERVAL_IN_MINUTES = 5
