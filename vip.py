@@ -184,7 +184,7 @@ def job():
                     # If today's date is already in dates_seeded_successfully, return early
                     if datetime.utcnow().date() in dates_seeded_successfully_only:
                         return
-                    # Update the document
+                    # add minutes to that player
                     vip.update_one(
                         {'steam_id_64': steam_id_64},
                         {'$inc': {'minutes_today': INTERVAL_IN_MINUTES}}  # Increment the 'minutes_today' field by interval
@@ -203,7 +203,6 @@ def job():
                         'level': 'recruit',
                         'vip_this_month':False,
                     })
-                    break
                     doc = vip.find_one({'steam_id_64': steam_id_64})  # Fetch the document to use below
 
                 # Check award condition
