@@ -25,9 +25,14 @@ vip = db.vip
 
 # Set interval
 INTERVAL_IN_MINUTES = 5
+
 MINUTES_REQUIREMENT_IF_SUCCESS = 15
 MINUTES_REQUIREMENT_IF_FAILURE = 120
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
+WAR='war'
+TRAINING='training'
+SEED='seed'
+MISC='misc'
 cookies = {'sessionid': SESSION_ID}
 
 
@@ -37,6 +42,9 @@ def post_to_discord(content):
 
     if response.status_code != 204:
         print(f"Failed to send message to Discord: {response.text}")
+
+def count_days_of_type(type,player_document):
+    return sum(1 for rec in player_document['participation'] if rec[1] == type and rec[0].month == current_month and rec[0].year == current_year)
 
 def calculate_expiration_date(player_doc):
     # Fetch the participation records
@@ -70,15 +78,14 @@ def check_and_promote_deemocrat():
     all_players = vip.find({})
     current_month = datetime.utcnow().month
     current_year = datetime.utcnow().year
-
+    
     # Iterate through all players and perform tasks
     for player in all_players:
         steam_id_64 = player['steam_id_64']
 
-
         # Count days player played war or training in current calendar month
-        days_played_war_this_month = sum(1 for rec in player['participation'] if rec[1] == 'war' and datetime.fromisoformat(rec[0]).month == current_month and datetime.fromisoformat(rec[0]).year == current_year)
-        days_played_training_this_month = sum(1 for rec in player['participation'] if rec[1] == 'training' and datetime.fromisoformat(rec[0]).month == current_month and datetime.fromisoformat(rec[0]).year == current_year)
+        days_played_war_this_month = count_days_of_type(player,WAR)
+        days_played_training_this_month = count_days_of_type(player,TRAINING)
 
         # If player played war or training 3 or more days this month, set level to 'deemocrat'
         if (days_played_war_this_month + days_played_training_this_month) >= 3:
@@ -96,16 +103,14 @@ def check_and_promote_deemocrat():
 def award_vip(steam_id_64, player_name):
     # Fetch the document for this player
     player_doc = vip.find_one({'steam_id_64': steam_id_64})
+    
+    # calculate how until when the VIP will be valid
     date_calc_result = calculate_expiration_date(player_doc)
     has_vip_this_month = date_calc_result[1]
     expiration_date = date_calc_result[0]
 
-
-    # Convert dates_seeded_successfully to dates only (no time) for comparison
-    dates_seeded_successfully_only = [datetime.fromisoformat(rec[0]).date() for rec in player_doc['participation'] if rec[1] == 'seed']
-
     # If today's date is already in dates_seeded_successfully, return early
-    if datetime.utcnow().date() in dates_seeded_successfully_only:
+    if datetime.utcnow().date() in count_days_of_type(player_doc,SEED):
         return
 
     # parameters for http request
@@ -120,11 +125,10 @@ def award_vip(steam_id_64, player_name):
             {'steam_id_64': steam_id_64},
             {
                 '$set': {'pending_award': False}, # reset 'pending_award'
-                '$set': {'minutes_today': 0},  # reset to 0
-                '$push': {'participation': [datetime.utcnow().isoformat(), 'seed']}  # Add the current date and time to 'participation' with 'seed' as participation type
-                }
+                '$push': {'participation': [datetime.utcnow().isoformat(), SEED]}  # Add the current date and time to 'participation' with 'seed' as participation type
+            }
         )
-        log.info(f"VIP Awarded to {steam_id_64} {player_name} {datetime.utcnow()}")
+        log.info(f"VIP Awarded to {steam_id_64} {player_name}")
     except requests.exceptions.RequestException as err:
         log.info(f"An error occurred while adding VIP status: {err}")
         # save it to try again later
@@ -179,7 +183,7 @@ def job():
 
                 if doc:
                     # Convert dates_seeded_successfully to dates only (no time) for comparison
-                    dates_seeded_successfully_only = [datetime.fromisoformat(rec[0]).date() for rec in doc['participation'] if rec[1] == 'seed']
+                    dates_seeded_successfully_only = count_days_of_type(doc,SEED)
 
                     # If today's date is already in dates_seeded_successfully, return early
                     if datetime.utcnow().date() in dates_seeded_successfully_only:
