@@ -42,43 +42,43 @@ async def list_voice_now(ctx):
     await ctx.send(f'Currently in Voice Channels:\n {voice_members}')
 
 
-@bot.event
-async def on_scheduled_event_user_add(event, user):
-    # Split the event name string into parts
-    event_parts = event.name.split(" vs ")
+# @bot.event
+# async def on_scheduled_event_user_add(event, user):
+#     # Split the event name string into parts
+#     event_parts = event.name.split(" vs ")
 
-    # Check if the string has been correctly split into three parts
-    if len(event_parts) == 3:
-        opponent_name = event_parts[2].lower()
+#     # Check if the string has been correctly split into three parts
+#     if len(event_parts) == 3:
+#         opponent_name = event_parts[2].lower()
 
-        guild = bot.get_guild(event.guild_id)
+#         guild = bot.get_guild(event.guild_id)
 
-        # Find the role that contains the opponent name as a substring
-        role = discord.utils.find(lambda r: opponent_name in r.name.lower(), guild.roles)
+#         # Find the role that contains the opponent name as a substring
+#         role = discord.utils.find(lambda r: opponent_name in r.name.lower(), guild.roles)
 
-        if role is not None:
-            member = guild.get_member(user.id)
+#         if role is not None:
+#             member = guild.get_member(user.id)
 
-            if role not in member.roles:
-                await member.add_roles(role)
+#             if role not in member.roles:
+#                 await member.add_roles(role)
 
-@bot.event
-async def on_scheduled_event_user_remove(event, user):
-# Split the event name string into parts
-    event_parts = event.name.split(" vs ")
+# @bot.event
+# async def on_scheduled_event_user_remove(event, user):
+# # Split the event name string into parts
+#     event_parts = event.name.split(" vs ")
 
-    # Check if the string has been correctly split into three parts
-    if len(event_parts) == 3:
-        opponent_name = event_parts[2].lower()
+#     # Check if the string has been correctly split into three parts
+#     if len(event_parts) == 3:
+#         opponent_name = event_parts[2].lower()
 
-        guild = bot.get_guild(event.guild_id)
+#         guild = bot.get_guild(event.guild_id)
 
-        # Find the role that contains the opponent name as a substring
-        role = discord.utils.find(lambda r: opponent_name in r.name.lower(), guild.roles)
+#         # Find the role that contains the opponent name as a substring
+#         role = discord.utils.find(lambda r: opponent_name in r.name.lower(), guild.roles)
 
-    member = guild.get_member(user.id)
-    if role in member.roles:
-        await member.remove_roles(role)
+#     member = guild.get_member(user.id)
+#     if role in member.roles:
+#         await member.remove_roles(role)
 
 @bot.event
 async def on_ready():
