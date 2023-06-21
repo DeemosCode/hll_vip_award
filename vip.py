@@ -215,8 +215,8 @@ def job():
                     # Make external API call
                     award_vip(steam_id_64,player_name)
 
-
-    log.info(f"Ran job - No of players : {no_of_players}")    
+    if(no_of_players!=0):
+        log.info(f"Ran job - No of players : {no_of_players}")
 
 schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
 schedule.every(1).hours.do(check_and_promote_deemocrat)
