@@ -84,8 +84,8 @@ def check_and_promote_deemocrat():
         steam_id_64 = player['steam_id_64']
 
         # Count days player played war or training in current calendar month
-        days_played_war_this_month = count_days_of_type(player,WAR)
-        days_played_training_this_month = count_days_of_type(player,TRAINING)
+        days_played_war_this_month = count_days_of_type(WAR, player)
+        days_played_training_this_month = count_days_of_type(TRAINING, player)
 
         # If player played war or training 3 or more days this month, set level to 'deemocrat'
         if (days_played_war_this_month + days_played_training_this_month) >= 3:
@@ -110,7 +110,7 @@ def award_vip(steam_id_64, player_name):
     expiration_date = date_calc_result[0]
 
     # If today's date is already in dates_seeded_successfully, return early
-    if datetime.utcnow().date() in count_days_of_type(player_doc,SEED):
+    if datetime.utcnow().date() in count_days_of_type(SEED, player_doc):
         return
 
     # parameters for http request
