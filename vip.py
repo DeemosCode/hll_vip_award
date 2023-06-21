@@ -44,7 +44,8 @@ def post_to_discord(content):
         print(f"Failed to send message to Discord: {response.text}")
 
 def count_days_of_type(type,player_document):
-    return sum(1 for rec in player_document['participation'] if rec[1] == type and rec[0].month == current_month and rec[0].year == current_year)
+    if (player_document['participation'] != None):
+        return sum(1 for rec in player_document['participation'] if rec[1] == type and rec[0].month == current_month and rec[0].year == current_year)
 
 def calculate_expiration_date(player_doc):
     # Fetch the participation records
