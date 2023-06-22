@@ -23,7 +23,7 @@ log.setLevel(logging.INFO)
 client = MongoClient(MONGO_CONNECTION_STRING)  # Connect to your MongoDB
 db = client.deemos 
 vip = db.vip
-
+    
 # Set interval
 INTERVAL_IN_MINUTES = 5
 MINUTES_REQUIREMENT_IF_SUCCESS = 15
@@ -139,7 +139,7 @@ def award_vip(steam_id_64, player_name):
             {'steam_id_64': steam_id_64},
             {
                 '$set': {'pending_award': False}, # reset 'pending_award'
-                '$push': {'participation': [datetime.utcnow().isoformat(), SEED]}  # Add the current date and time to 'participation' with 'seed' as participation type
+                '$push': {'participation': [datetime.utcnow(), SEED]}  # Add the current date and time to 'participation' with 'seed' as participation type
             }
         )
         log.info(f"VIP Awarded to {steam_id_64} {player_name}")
