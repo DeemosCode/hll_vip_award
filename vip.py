@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import requests
 import schedule
 import calendar
@@ -25,7 +26,6 @@ vip = db.vip
 
 # Set interval
 INTERVAL_IN_MINUTES = 5
-
 MINUTES_REQUIREMENT_IF_SUCCESS = 15
 MINUTES_REQUIREMENT_IF_FAILURE = 120
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1119199023602073610/nmqzDMXyWjPI0GLd5x-U4QPLbLHVCd17ecHAkQKs0JzBVeZcfPqlMeRkdLSsLH-HpDrG"
@@ -41,11 +41,24 @@ def post_to_discord(content):
     response = requests.post(DISCORD_WEBHOOK_URL, json=data)
 
     if response.status_code != 204:
-        print(f"Failed to send message to Discord: {response.text}")
+        log.info(f"Failed to send message to Discord: {response.text}")
 
-def count_days_of_type(type,player_document):
-    if (player_document['participation'] != None):
-        return sum(1 for rec in player_document['participation'] if rec[1] == type and rec[0].month == current_month and rec[0].year == current_year)
+def count_days_of_type(participation_type,player_document):
+    current_year = datetime.utcnow().year
+    current_month = datetime.utcnow().month
+    if (player_document['participation'] is not None):
+        return sum(1 for rec in player_document['participation'] if rec[1] == participation_type and rec[0].month == current_month and rec[0].year == current_year)
+
+def fetch_days_of_type_in_current_month(participation_type, player_document):
+    current_year = datetime.utcnow().year
+    current_month = datetime.utcnow().month
+    dates_list = []
+    if player_document['participation'] is not None:
+        for rec in player_document['participation']:
+            if rec[1] == participation_type and rec[0].month == current_month and rec[0].year == current_year:
+                dates_list.append(rec[0].date())
+    return dates_list
+
 
 def calculate_expiration_date(player_doc):
     # Fetch the participation records
@@ -111,7 +124,7 @@ def award_vip(steam_id_64, player_name):
     expiration_date = date_calc_result[0]
 
     # If today's date is already in dates_seeded_successfully, return early
-    if datetime.utcnow().date() in count_days_of_type(SEED, player_doc):
+    if datetime.utcnow().date() in fetch_days_of_type_in_current_month(SEED, player_doc):
         return
 
     # parameters for http request
@@ -181,10 +194,9 @@ def job():
 
                 # Find the document for this player
                 doc = vip.find_one({'steam_id_64': steam_id_64})
-
                 if doc:
                     # Convert dates_seeded_successfully to dates only (no time) for comparison
-                    dates_seeded_successfully_only = count_days_of_type(doc,SEED)
+                    dates_seeded_successfully_only = fetch_days_of_type_in_current_month(SEED,doc)
 
                     # If today's date is already in dates_seeded_successfully, return early
                     if datetime.utcnow().date() in dates_seeded_successfully_only:
