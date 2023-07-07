@@ -5,8 +5,7 @@ import requests
 import schedule
 import calendar
 from pymongo import MongoClient
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
+from datetime import datetime,timedelta
 import logging
 from systemd import journal
 from dotenv import load_dotenv
@@ -41,13 +40,24 @@ def post_to_discord(content):
     response = requests.post(DISCORD_WEBHOOK_URL, json=data)
 
     if response.status_code != 204:
-        log.info(f"Failed to send message to Discord: {response.text}")
+        print(f"Failed to send message to Discord: {response.text}")
 
 def count_days_of_type(participation_type,player_document):
     current_year = datetime.utcnow().year
     current_month = datetime.utcnow().month
     if (player_document['participation'] is not None):
         return sum(1 for rec in player_document['participation'] if rec[1] == participation_type and rec[0].month == current_month and rec[0].year == current_year)
+
+def count_participation_last_30_days(player_document):
+    # Get the current date/time
+    current_date = datetime.utcnow()
+
+    # Calculate the date 30 days ago
+    date_30_days_ago = current_date - timedelta(days=30)
+
+    if (player_document['participation'] is not None):
+        return sum(1 for rec in player_document['participation'] if rec[0] >= date_30_days_ago)
+
 
 def fetch_days_of_type_in_current_month(participation_type, player_document):
     current_year = datetime.utcnow().year
@@ -67,7 +77,7 @@ def calculate_expiration_date(player_doc):
     # Fetch dates from participation records for 'seed' type in the current calendar month
     current_year = datetime.utcnow().year
     current_month = datetime.utcnow().month
-    dates_seeded_successfully = [datetime.fromisoformat(rec[0]) for rec in participation_records if rec[1] == "seed" and datetime.fromisoformat(rec[0]).year == current_year and datetime.fromisoformat(rec[0]).month == current_month]
+    dates_seeded_successfully = [datetime(rec[0]) for rec in participation_records if rec[1] == "seed" and datetime(rec[0]).year == current_year and datetime(rec[0]).month == current_month]
 
     # Count successful days in current calendar month
     successful_days_current_month = len(dates_seeded_successfully)
@@ -87,6 +97,33 @@ def calculate_expiration_date(player_doc):
 
     return (expiration_date, has_vip_until_end_of_month)
 
+
+def check_and_demote_aspiring():
+    # Fetch all players
+    all_players = vip.find({})
+    current_month = datetime.utcnow().month
+    current_year = datetime.utcnow().year
+    
+    # Iterate through all players and perform tasks
+    for player in all_players:
+        discord_id = player['discord_id']
+
+        # If player played war or training 3 or more days this month, set level to 'deemocrat'
+        if (count_participation_last_30_days(player)) == 0:
+            # vip.update_one(
+            #     {'discord_id': discord_id},
+            #     {
+            #         '$set': {'level': 'none'}  # Demote to nothing
+            #     }
+            # )
+            print(f"Loss of recruit status for {player['discord_id']}")
+            post_to_discord(f"Loss of Recruit status for {player['discord_id']}")
+
+    print("Checked for recruit demotions")
+
+
+
+
 def check_and_promote_deemocrat():
     # Fetch all players
     all_players = vip.find({})
@@ -97,22 +134,18 @@ def check_and_promote_deemocrat():
     for player in all_players:
         steam_id_64 = player['steam_id_64']
 
-        # Count days player played war or training in current calendar month
-        days_played_war_this_month = count_days_of_type(WAR, player)
-        days_played_training_this_month = count_days_of_type(TRAINING, player)
-
         # If player played war or training 3 or more days this month, set level to 'deemocrat'
-        if (days_played_war_this_month + days_played_training_this_month) >= 3:
+        if (len(player['participation'])) >= 5:
             vip.update_one(
                 {'steam_id_64': steam_id_64},
                 {
                     '$set': {'level': 'deemocrat'}  # Set 'level' to 'deemocrat'
                 }
             )
-            log.info(f"PROMOTION TO DEEMOCRAT for {player['name']}")
-            post_to_discord(f"PROMOTION TO DEEMOCRAT for {player['name']}")
+            print(f"PROMOTION TO DEEMOCRAT for {player['discord_id']}")
+            post_to_discord(f"PROMOTION TO DEEMOCRAT for {player['discord_id']}")
 
-    log.info("Checked for deemocrat promotions")
+    print("Checked for deemocrat promotions")
 
 def award_vip(steam_id_64, player_name):
     # Fetch the document for this player
@@ -142,9 +175,9 @@ def award_vip(steam_id_64, player_name):
                 '$push': {'participation': [datetime.utcnow(), SEED]}  # Add the current date and time to 'participation' with 'seed' as participation type
             }
         )
-        log.info(f"VIP Awarded to {steam_id_64} {player_name}")
+        print(f"VIP Awarded to {steam_id_64} {player_name}")
     except requests.exceptions.RequestException as err:
-        log.info(f"An error occurred while adding VIP status: {err}")
+        print(f"An error occurred while adding VIP status: {err}")
         # save it to try again later
         vip.update_one(
             {'steam_id_64': steam_id_64},
@@ -171,7 +204,7 @@ def reset_minutes_today():
                 '$set': {'minutes_today': 0}  # Reset 'minutes_today' to 0
             }
         )
-    log.info("Reset minutes_today for all players")
+    print("Reset minutes_today for all players")
 
 def job():
     no_of_players=0
@@ -181,12 +214,12 @@ def job():
         response = requests.get('http://server.deemos.club/api/get_players_fast', cookies=cookies)
         response.raise_for_status()  # Raise an exception if the response was unsuccessful
     except requests.exceptions.RequestException as err:
-        log.info ("An error occurred: ", err)
+        print ("An error occurred: ", err)
     else:
         data = response.json()
         no_of_players= len(data['result'])
         if data['failed'] != False:
-            log.info(f'Error in API response: {data}')
+            print(f'Error in API response: {data}')
         else:
             for player in data['result']:
                 steam_id_64 = player['steam_id_64']
@@ -224,18 +257,21 @@ def job():
 
                 # Check award condition
                 if (no_of_players >= 50 and doc['minutes_today'] >= MINUTES_REQUIREMENT_IF_SUCCESS) or (doc['minutes_today'] >= MINUTES_REQUIREMENT_IF_FAILURE):
-
+                    print(f"vip attempt to award to {player_name}")
                     # Make external API call
-                    award_vip(steam_id_64,player_name)
+                    # award_vip(steam_id_64,player_name)
 
     if(no_of_players!=0):
-        log.info(f"Ran job - No of players : {no_of_players}")
+        print(f"Ran job - No of players : {no_of_players}")
 
-schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
-schedule.every(1).hours.do(check_and_promote_deemocrat)
-schedule.every().day.at("07:00").do(reset_minutes_today)  # Reset 'minutes_today' to 0 every day at 7AM
+# schedule.every(INTERVAL_IN_MINUTES).minutes.do(job)
+# schedule.every(1).hours.do(check_and_promote_deemocrat)
+# # schedule.every(1).hours.do(check_and_demote_aspiring)
+# schedule.every().day.at("07:00").do(reset_minutes_today)  # Reset 'minutes_today' to 0 every day at 7AM
+# job()
+# # Keep the script running.
+# while True:
+#     schedule.run_pending()
+#     time.sleep(1)
 
-# Keep the script running.
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+check_and_demote_aspiring()
