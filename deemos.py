@@ -21,7 +21,7 @@ log.setLevel(logging.INFO)
 # Set up the MongoDB client
 client = MongoClient(MONGO_CONNECTION_STRING)  # Connect to your MongoDB
 db = client.deemos 
-vip = db.vip
+vip = db.members
     
 # Set interval
 INTERVAL_IN_MINUTES = 5
